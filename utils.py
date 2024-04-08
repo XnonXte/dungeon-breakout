@@ -2,35 +2,43 @@ import pygame
 from os import path, listdir
 
 
-def load_spritesheets(spritesheets_dir, width, height):
-    """Loading spritesheets into a dict."""
-    images = [
-        image
-        for image in listdir(spritesheets_dir)
-        if path.isfile(path.join(spritesheets_dir, image))
-    ]
-    spritesheets = {}
+def flip(images):
+    flipped_images = []
 
     for image in images:
-        image_path = path.join(spritesheets_dir, image)
-        sprite = (
-            pygame.image.load(image_path).convert_alpha()
-            if image_path.endswith(".png")
-            else pygame.image.load(image_path).convert()
-        )
+        flipped_images.append(pygame.transform.flip(image, True, False))
+
+    return flipped_images
+
+
+def load_spritesheet(spritesheet_dir, width, height, flipped=False):
+    images = [
+        image
+        for image in listdir(spritesheet_dir)
+        if path.isfile(path.join(spritesheet_dir, image))
+    ]
+    spritesheet = {}
+
+    for image in images:
+        image_path = path.join(spritesheet_dir, image)
+        sprite = pygame.image.load(image_path).convert_alpha()
         sprites = []
 
         for i in range(sprite.get_width() // width):
             # Split image based on the width specified.
-            image_surface = pygame.Surface((width, height), pygame.SRCALPHA, 32)
+            image_surface = pygame.Surface((width, height), pygame.SRCALPHA)
             image_rect = pygame.Rect(i * width, 0, width, height)
             image_surface.blit(sprite, (0, 0), image_rect)
 
             sprites.append(image_surface)
 
-        spritesheets[image.replace(".png", "")] = sprites
+        if flipped:
+            spritesheet[image.replace(".png", "") + "_right"] = sprites
+            spritesheet[image.replace(".png", "") + "_left"] = flip(sprites)
+        else:
+            spritesheet[image.replace(".png", "")] = sprites
 
-    return spritesheets
+    return spritesheet
 
 
 def check_collision_direction(left_rect, right_rect):

@@ -2,7 +2,8 @@
 
 ## Todos
 
-- Add player attack animation.
+- Add player attack animation. (DONE)
+- Add player death animation. (DONE)
 - Create a simple enemy (slime, guard, guard with guns, monster, etc.)
 - Create power ups (faster movement speed, faster attack speed, etc.)
 - Create a key and door mechanics.

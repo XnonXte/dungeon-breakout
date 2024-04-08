@@ -1,11 +1,11 @@
 import pygame
 from os import path
-from utils import load_spritesheets, check_collision_direction
+from utils import load_spritesheet, check_collision_direction
 from const import (
-    PLAYER_WIDTH,
-    PLAYER_HEIGHT,
+    PLAYER_SPRITE_WIDTH,
+    PLAYER_SPRITE_HEIGHT,
     PLAYER_VEL,
-    ANIMATION_DELAY,
+    NORMAL_ANIMATION_SPEED,
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
     INTERNAL_SCREEN_WIDTH,
@@ -18,6 +18,7 @@ from const import (
     HAZARD_TRIGGER,
     OBSTACLE_TRIGGER,
     TRIGGER_DEBUG,
+    SWINGING_ANIMATION_SPEED,
 )
 
 
@@ -74,66 +75,124 @@ class Shadow(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     """Player sprite class."""
 
-    ATTACK_SPRITES = load_spritesheets(
+    ATTACK_SPRITES = load_spritesheet(
         path.join("assets", "player", "attack"),
-        PLAYER_WIDTH,
-        PLAYER_HEIGHT,
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
     )
-    DEATH_SPRITES = load_spritesheets(
+    DEATH_SPRITES = load_spritesheet(
         path.join("assets", "player", "death"),
-        PLAYER_WIDTH,
-        PLAYER_HEIGHT,
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
     )
-    IDLE_SPRITES = load_spritesheets(
+    IDLE_SPRITES = load_spritesheet(
         path.join("assets", "player", "idle"),
-        PLAYER_WIDTH,
-        PLAYER_HEIGHT,
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
     )
-    RUN_SPRITES = load_spritesheets(
+    RUN_SPRITES = load_spritesheet(
         path.join("assets", "player", "run"),
-        PLAYER_WIDTH,
-        PLAYER_HEIGHT,
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
     )
 
     def __init__(self, pos, group, z_index=1):
         super().__init__(group)
-        self.image = self.IDLE_SPRITES["idle_down_40x40"][0]
+
+        # Essential properties.
+        self.image = pygame.Surface((PLAYER_SPRITE_WIDTH, PLAYER_SPRITE_HEIGHT))
         self.rect = self.image.get_rect(center=pos)
         self.mask = pygame.mask.from_surface(self.image)
-        self.animation_state = "idle"
-        self.animation_direction = "down"
+
+        # Logic states.
         self.direction = pygame.math.Vector2()
-        self.animation_count = 0
-        self.trigger_group = pygame.sprite.Group()
-        self.z_index = z_index
+        self.attacked = False
+        self.dead = False  #! Should be temporary!
+
+        # Animation states.
+        self.animation_state = "idle"
+        self.last_frame_animation_state = self.animation_state
+        self.animation_direction = "down"
+        self.animation_index = 0
+
+        # Miscellaneous.
         self.shadow = Shadow((0, 0, 0, 100), self, group, z_index=2)
+        self.z_index = z_index
         self.trigger_group = pygame.sprite.Group()
+
         self.load_trigger_group(group, self.trigger_group)
 
     def load_trigger_group(self, group, trigger_group):
+        """Helper function to load all triggers."""
         for sprite in group:
             if sprite.__class__.__name__ == "Trigger":
-                # Getting all Trigger classes in group.
                 trigger_group.add(sprite)
-
-    def update_rect_and_mask(self):
-        """Updating rect and mask everytime a change occurs."""
-        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
-        self.mask = pygame.mask.from_surface(self.image)
 
     def get_collided_triggers(self):
         """Helper function to get the collided triggers."""
         collided_triggers = pygame.sprite.spritecollide(self, self.trigger_group, False)
         return collided_triggers
 
-    def check_hazard_collision(self):
+    def update_rect_and_mask(self):
+        """Helper function to update rect and mask every time a change occurs."""
+        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
+        self.mask = pygame.mask.from_surface(self.image)
+
+    def determine_animation_state(self):
+        """Helper function to determine which animation to play."""
+        if self.dead:
+            self.animation_state = "death"
+        elif self.attacked:
+            self.animation_state = "attack"
+        elif self.direction.x != 0 or self.direction.y != 0:
+            self.animation_state = "run"
+        else:
+            self.animation_state = "idle"
+
+    def determine_animation_direction(self):
+        """Helper function to determine which direction the player is currently facing"""
+
+        # Don't change direction while attack or death animation is playing.
+        if self.attacked or self.dead:
+            return
+
+        keys = pygame.key.get_pressed()
+
+        if keys[pygame.K_w]:
+            self.animation_direction = "up"
+        elif keys[pygame.K_s]:
+            self.animation_direction = "down"
+
+        if keys[pygame.K_a]:
+            self.animation_direction = "left"
+        elif keys[pygame.K_d]:
+            self.animation_direction = "right"
+
+    def load_animation_spritesheet(self):
+        """Helper function to handle player sprite based on the current animation state."""
+        sprites = {}
+
+        match self.animation_state:
+            case "idle":
+                sprites = self.IDLE_SPRITES
+            case "run":
+                sprites = self.RUN_SPRITES
+            case "attack":
+                sprites = self.ATTACK_SPRITES
+            case "death":
+                sprites = self.DEATH_SPRITES
+            case _:
+                raise NotImplementedError(self.animation_state)
+
+        return sprites
+
+    def handle_check_hazard_collision(self):
         """Checking hazard collision, (e.g. water)"""
         for collided_trigger in self.get_collided_triggers():
             if collided_trigger.name == HAZARD_TRIGGER:
-                self.shadow.kill()
-                self.kill()  #! Temporary!
+                self.dead = True
 
-    def check_obstacle_collision(self):
+    def handle_check_obstacle_collision(self):
         """Checking if a vertical or horizontal collision occurs with an obstacle."""
         for collided_trigger in self.get_collided_triggers():
             if collided_trigger.name == OBSTACLE_TRIGGER:
@@ -150,31 +209,32 @@ class Player(pygame.sprite.Sprite):
                 elif collision_direction.x > 0:
                     self.rect.right = collided_trigger.rect.left
 
-    def handle_collision(self):
-        self.check_hazard_collision()
-        self.check_obstacle_collision()
+    def fire_attack(self):
+        """Triggering an attack sequence, this method should only be called on top level event handler."""
+        if not self.attacked:
+            self.attacked = True
 
     def handle_movement(self):
         """Handling player 8-directional movement with a normal diagonal speed."""
+        # Don't move the player when attack or death animation is playing"
+        if self.attacked or self.dead:
+            return
+
         keys = pygame.key.get_pressed()
 
         # Vertical movement.
         if keys[pygame.K_w]:
             self.direction.y = -1
-            self.animation_direction = "up"
         elif keys[pygame.K_s]:
             self.direction.y = 1
-            self.animation_direction = "down"
         else:
             self.direction.y = 0
 
         # Horizontal movement.
         if keys[pygame.K_a]:
             self.direction.x = -1
-            self.animation_direction = "left"
         elif keys[pygame.K_d]:
             self.direction.x = 1
-            self.animation_direction = "right"
         else:
             self.direction.x = 0
 
@@ -182,45 +242,52 @@ class Player(pygame.sprite.Sprite):
         if self.direction.length() > 0:
             self.direction.normalize_ip()
 
-        # Checking animation state.
-        if keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]:
-            self.animation_state = "run"
-        else:
-            self.animation_state = "idle"
-
         self.rect.center += self.direction * PLAYER_VEL
 
     def handle_animation(self):
-        """Handling player animation based on the current state."""
-        sprites = {}
+        """Update the player's animation frame."""
+        self.determine_animation_direction()
+        self.determine_animation_state()
+        spritesheet = self.load_animation_spritesheet()
+        animation_key = f"{self.animation_state}_{self.animation_direction}_40x40"
+        sprites = spritesheet[animation_key]
 
-        match self.animation_state:
-            case "idle":
-                sprites = self.IDLE_SPRITES
-            case "run":
-                sprites = self.RUN_SPRITES
-            case "attack":
-                sprites = self.ATTACK_SPRITES
-            case "death":
-                sprites = self.DEATH_SPRITES
-            case _:
-                raise NotImplementedError(self.animation_state)
+        # Animation logic when attacking.
+        if self.attacked:
+            self.animation_index += SWINGING_ANIMATION_SPEED
+            if self.animation_index >= len(sprites):
+                self.attacked = False
+        else:
+            self.animation_index += NORMAL_ANIMATION_SPEED
 
-        animation_index = (self.animation_count // ANIMATION_DELAY) % len(sprites)
-        self.image = sprites[
-            f"{self.animation_state}_{self.animation_direction}_40x40"
-        ][animation_index]
-        self.animation_count += 1
+        # Animation logic when the player is dead.
+        if self.dead and self.animation_index >= len(sprites):
+            self.shadow.kill()
+            self.kill()
+
+        # Reset animation index if animation state changed or reached end of sprites.
+        if (
+            self.animation_state != self.last_frame_animation_state
+            or self.animation_index >= len(sprites)
+        ):
+            self.animation_index = 0
+
+        animation_index_int = int(self.animation_index)
+        self.image = sprites[animation_index_int]
         self.update_rect_and_mask()
 
+        # Update last frame animation state.
+        self.last_frame_animation_state = self.animation_state
+
     def update(self):
-        self.handle_collision()
+        self.handle_check_hazard_collision()
+        self.handle_check_obstacle_collision()
         self.handle_animation()
         self.handle_movement()
 
 
 class CameraGroup(pygame.sprite.Group):
-    """Group class which supports camera, zoom, and z-indexing."""
+    """Group class which supports camera, zoom, and rendering by z-index."""
 
     def __init__(self):
         super().__init__()

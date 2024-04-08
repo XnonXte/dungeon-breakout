@@ -8,6 +8,7 @@ from const import *
 
 class Game:
     def main(self):
+        pygame.mouse.set_visible(False)  # Disable cursor.
         tmx_data = load_pygame(path.join("maps", "tmx", "open_island.tmx"))
         camera_group = CameraGroup()
         running = True
@@ -49,6 +50,11 @@ class Game:
                 if event.type == pygame.QUIT:
                     running = False
 
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        # Mouse 1.
+                        player_sprite.fire_attack()
+
             screen.fill(BACKGROUND_COLOR)
 
             camera_group.camera_draw(player_sprite)
@@ -62,4 +68,5 @@ class Game:
 
 
 if __name__ == "__main__":
-    Game().main()
+    game = Game()
+    game.main()
