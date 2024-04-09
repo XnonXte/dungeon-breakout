@@ -1,4 +1,5 @@
 import pygame
+
 from const import SCREEN_WIDTH, SCREEN_HEIGHT, CAPTION
 
 pygame.init()

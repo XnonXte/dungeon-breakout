@@ -1,28 +1,50 @@
-# Essential constants.
+# Pygame constants.
 FPS = 60
 CAPTION = "Dungeon Breakout"
-BACKGROUND_COLOR = "#3d8baf"
+
+# Screen constants.
 DEFAULT_SCALE = 2
 MIN_SCALE = 1
 MAX_SCALE = 2
-NORMAL_ANIMATION_SPEED = 0.15
-SWINGING_ANIMATION_SPEED = 0.25
+
+# Animation constants.
+NORMAL_ANIMATION_SPEED = 0.1
+SWINGING_ANIMATION_SPEED = 0.2
 SCALE_SPEED = 0.1
+
+# Name constants.
 HAZARD_TRIGGER = "hazard"
 OBSTACLE_TRIGGER = "obstacle"
-HAZARD_TRIGGER_DEBUG_COLOR = "Red"
-OBSTACLE_TRIGGER_DEBUG_COLOR = "Yellow"
-TRIGGER_DEBUG = False
+PLAYER_SPAWN = "player_spawn"
+WATCHER_SPAWN = "watcher_spawn"
+
+# Flag constants.
+DEBUG_MODE = False
 
 # Dimension constants.
 SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
 INTERNAL_SCREEN_WIDTH, INTERNAL_SCREEN_HEIGHT = (
     1280,
     720,
-)  # For performance reason we set this to 1:1 with the main screen's size.
+)
 TILE_SIZE = 24
 PLAYER_SPRITE_WIDTH = 40
 PLAYER_SPRITE_HEIGHT = 40
+WATCHER_SPRITE_WIDTH = 16
+WATCHER_SPRITE_HEIGHT = 16
+WATCHER_SCALE_FACTOR = 2
 
-# Logic constants.
+# Gameplay constants.
 PLAYER_VEL = 2
+WATCHER_VEL = 1
+MAX_HEALTH_PLAYER = 8
+MAX_HEALTH_WATCHER = 4
+PLAYER_RADIUS = 100
+
+# Color constants.
+SHADOW_RGBA = (0, 0, 0, 100)
+BACKGROUND_COLOR = "#3d8baf"
+HAZARD_TRIGGER_DEBUG_COLOR = "Red"
+OBSTACLE_TRIGGER_DEBUG_COLOR = "Yellow"
+RADIUS_DEBUG_COLOR = "Green"
+RADIUS_LINE_DEBUG_COLOR = "Blue"
