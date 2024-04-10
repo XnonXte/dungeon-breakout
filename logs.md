@@ -2,8 +2,10 @@
 
 ## Todos
 
-- Create a simple enemy (slime, guard, guard with guns, monster, etc.)
-- Create power ups (faster movement speed, faster attack speed, etc.)
+- Create a simple chasing enemy AI (DONE).
+- Implement player and enemy damage. (DONE)
+- Create health bar that follows beneath the player.
+- Create power ups (faster movement speed, faster attack speed, etc).
 - Create a key and door mechanics.
 - Crate a key and chess mechanics.
 - Start creating the level, create 5-10 levels.

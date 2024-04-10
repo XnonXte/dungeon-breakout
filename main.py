@@ -1,11 +1,10 @@
-from random import choice
 from os import path
 
 import pygame
 from pytmx import load_pygame
 
 from config import screen, clock
-from sprites import Trigger, Tile, Watcher, Player, CameraGroup
+from sprites import Trigger, Tile, AnimatedPursuingEnemy, Player, CameraGroup
 from const import *
 
 
@@ -39,14 +38,9 @@ class Game:
     def load_enemies(self, player_sprite, tmx_data, group):
         """Helper function to load enemies into group."""
         for obj in tmx_data.objects:
-            if obj.name == WATCHER_SPAWN:
-                Watcher(
-                    (obj.x, obj.y),
-                    choice(["bloodshot", "ocular"]),
-                    player_sprite,
-                    group,
-                    1,
-                    2,
+            if obj.type == "enemy":
+                AnimatedPursuingEnemy(
+                    obj.name, (obj.x, obj.y), player_sprite, group, 3, 2
                 )
 
     def run(self):
@@ -61,7 +55,7 @@ class Game:
         self.load_tiles_and_triggers(tmx_data, camera_group)
 
         player_spawn = tmx_data.get_object_by_name(PLAYER_SPAWN)
-        player_sprite = Player((player_spawn.x, player_spawn.y), camera_group, 1, 2)
+        player_sprite = Player((player_spawn.x, player_spawn.y), camera_group, 3, 2)
 
         # Load enemies into the group, called after player_sprite has been initiated.
         self.load_enemies(player_sprite, tmx_data, camera_group)

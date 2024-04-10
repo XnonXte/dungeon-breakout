@@ -12,33 +12,47 @@ def flip(images):
     return flipped_images
 
 
-def load_spritesheet(spritesheet_dir, width, height, scale_factor=1.0, flipped=False):
-    """Load spritesheet into a dict. For both left and right direction, set `flipped` to True."""
+def load_spritesheets(spritesheets_dir, width, height, scale_factor=1.0, flipped=False):
+    """Function to load multiple spritesheets into a dict. For loading both left and right direction, set `flipped` to True."""
     images = [
         image
-        for image in listdir(spritesheet_dir)
-        if path.isfile(path.join(spritesheet_dir, image))
+        for image in listdir(spritesheets_dir)
+        if path.isfile(path.join(spritesheets_dir, image))
     ]
-    spritesheet = {}
-
-    # Load and split image based on the width specified.
+    spritesheets = {}
     for image in images:
-        image_path = path.join(spritesheet_dir, image)
-        sprite = pygame.image.load(image_path).convert_alpha()
-        sprites = []
-        for i in range(sprite.get_width() // width):
-            image_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-            image_rect = pygame.Rect(i * width, 0, width, height)
-            image_surface.blit(sprite, (0, 0), image_rect)
-            sprites.append(pygame.transform.scale_by(image_surface, scale_factor))
+        spritesheets.update(
+            split_spritesheets(
+                spritesheets_dir, image, width, height, scale_factor, flipped
+            )
+        )
+    return spritesheets
 
+
+def split_spritesheets(
+    spritesheet_dir,
+    spritesheet_name,
+    width,
+    height,
+    scale_factor=1.0,
+    flipped=False,
+):
+    """Split a single spritesheet based on the width specified."""
+    spritesheet_path = path.join(spritesheet_dir, spritesheet_name)
+    spritesheet_surface = pygame.image.load(spritesheet_path).convert_alpha()
+    spritesheets = {}
+    sprites = []
+    for i in range(spritesheet_surface.get_width() // width):
+        sprite_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+        sprite_rect = pygame.Rect(i * width, 0, width, height)
+        sprite_surface.blit(spritesheet_surface, (0, 0), sprite_rect)
+        sprites.append(pygame.transform.scale_by(sprite_surface, scale_factor))
         if flipped:
-            spritesheet[f"{image.replace('.png', '')}_right"] = sprites
-            spritesheet[f"{image.replace('.png', '')}_left"] = flip(sprites)
+            spritesheets[f"{spritesheet_name.replace('.png', '')}_right"] = sprites
+            spritesheets[f"{spritesheet_name.replace('.png', '')}_left"] = flip(sprites)
         else:
-            spritesheet[image.replace(".png", "")] = sprites
-
-    return spritesheet
+            spritesheets[spritesheet_name.replace(".png", "")] = sprites
+    return spritesheets
 
 
 def check_collision_direction(left_rect, right_rect):

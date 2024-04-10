@@ -2,7 +2,6 @@ from os import path
 
 import pygame
 
-from config import *
 from utils import *
 from const import *
 
@@ -17,11 +16,8 @@ class Trigger(pygame.sprite.Sprite):
         super().__init__(group)
         self.screen = pygame.display.get_surface()
         self.image = pygame.Surface((width, height), pygame.SRCALPHA)
-
-        # Set this in const.py.
         if DEBUG_MODE:
             self.image.fill(color)
-
         self.rect = self.image.get_rect(topleft=pos)
         self.name = name
         self.z_index = z_index
@@ -41,26 +37,40 @@ class Shadow(pygame.sprite.Sprite):
     """Circular shadow beneath a parent sprite."""
 
     def __init__(
-        self, rgba, parent_sprite, width_scale, height_scale, group, z_index=1
+        self,
+        rgba,
+        parent_sprite,
+        width_scale,
+        height_scale,
+        group,
+        center_point="center",
+        z_index=1,
     ):
         super().__init__(group)
         self.parent_sprite = parent_sprite
         self.image = pygame.Surface(
             (
-                parent_sprite.rect.width // width_scale,
-                parent_sprite.rect.height // height_scale,
+                parent_sprite.image.get_width() // width_scale,
+                parent_sprite.image.get_width() // height_scale,
             ),
             pygame.SRCALPHA,
         )
         self.rect = self.image.get_rect()
+        self.center_point = center_point
         self.z_index = z_index
 
         # Drawing shadow as an ellipse.
         pygame.draw.ellipse(self.image, rgba, self.rect)
 
     def handle_movement(self):
-        """Move the shadow beneath the parent's sprite."""
-        self.rect.midbottom = self.parent_sprite.rect.midbottom
+        """Move the shadow at the specified center point."""
+        match self.center_point:
+            case "midbottom":
+                self.rect.midbottom = self.parent_sprite.rect.midbottom
+            case "center":
+                self.rect.center = self.parent_sprite.rect.midbottom
+            case _:
+                raise NotImplementedError(self.center_point)
 
     def update(self):
         self.handle_movement()
@@ -73,11 +83,12 @@ class Entity(pygame.sprite.Sprite):
         self,
         pos,
         image,
+        health,
+        group,
         shadow_rgba,
         shadow_width_scale,
         shadow_height_scale,
-        health,
-        group,
+        shadow_center_point,
         z_index=1,
         shadow_z_index=1,
     ):
@@ -93,215 +104,12 @@ class Entity(pygame.sprite.Sprite):
             shadow_width_scale,
             shadow_height_scale,
             group,
+            shadow_center_point,
             shadow_z_index,
         )
-        self.z_index = z_index
-
-    def update(self):
-        if self.health <= 0:
-            self.dying = True
-
-
-class Enemy(Entity):
-    """Enemy base sprite class."""
-
-    def __init__(
-        self,
-        pos,
-        image,
-        shadow_rgba,
-        shadow_width_scale,
-        shadow_height_scale,
-        health,
-        player_sprite,
-        group,
-        z_index=1,
-        shadow_z_index=1,
-    ):
-        super().__init__(
-            pos,
-            image,
-            shadow_rgba,
-            shadow_width_scale,
-            shadow_height_scale,
-            health,
-            group,
-            z_index,
-            shadow_z_index,
-        )
-        self.player_sprite = player_sprite
-        self.distance_to_player = 0
-        self.pursuing = False
-
-    def handle_player_radius(self):
-        """Checking if this sprite is in the player radius or not."""
-        self.distance_to_player = calculate_distance(
-            self.player_sprite.rect.center, self.rect.center
-        )
-
-        # Check if the player is within the detection radius.
-        if self.distance_to_player <= PLAYER_RADIUS:
-            self.pursuing = True
-
-            # When DEBUG_MODE is active, draw the detection radius, detection line and the enemy pos.
-            #! A bit buggy but can't be bothered to fix it right now.
-            if DEBUG_MODE:
-                pygame.draw.circle(
-                    screen,
-                    RADIUS_DEBUG_COLOR,
-                    self.player_sprite.rect.center,
-                    PLAYER_RADIUS,
-                    4,
-                )
-                pygame.draw.line(
-                    screen,
-                    RADIUS_LINE_DEBUG_COLOR,
-                    self.player_sprite.rect.center,
-                    self.rect.center,
-                    4,
-                )
-                print(
-                    f"Enemy {self.__class__.__name__} is inside the radius at: {str(self.rect.center)}"
-                )
-        else:
-            self.pursuing = False
-
-    def update(self):
-        self.handle_player_radius()
-
-
-class Watcher(Enemy):
-    """Watcher (enemy) sprite class."""
-
-    WATCHER_TYPES = ["bloodshot", "ocular"]
-
-    def __init__(
-        self, pos, watcher_type, player_sprite, group, z_index=1, shadow_z_index=1
-    ):
-        # Make sure the type exists.
-        if watcher_type not in self.WATCHER_TYPES:
-            raise NotImplementedError(watcher_type)
-
-        self.spritesheets = load_spritesheet(
-            path.join("assets", "enemies", "watchers"),
-            WATCHER_SPRITE_WIDTH,
-            WATCHER_SPRITE_HEIGHT,
-            WATCHER_SCALE_FACTOR,
-            True,
-        )
-        self.animation_direction = "right"
-        self.animation_index = 0
-        image = self.spritesheets[f"{watcher_type}_{self.animation_direction}"][
-            self.animation_index
-        ]
-        super().__init__(
-            pos,
-            image,
-            SHADOW_RGBA,
-            2,
-            4,
-            MAX_HEALTH_WATCHER,
-            player_sprite,
-            group,
-            z_index,
-            shadow_z_index,
-        )
-        self.direction_to_player = pygame.math.Vector2()
-        self.watcher_type = watcher_type
-        self.z_index = z_index
-
-    def update_rect_and_mask(self):
-        """Helper function to update rect and mask every time a change occurs."""
-        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
-        self.mask = pygame.mask.from_surface(self.image)
-
-    def determine_animation_direction(self):
-        """Helper function to determine which direction the player is currently facing"""
-        if self.direction_to_player.x > 0:
-            self.animation_direction = "right"
-        else:
-            self.animation_direction = "left"
-
-    def handle_animation(self):
-        """Handling watcher animation."""
-        self.determine_animation_direction()
-        self.animation_index += NORMAL_ANIMATION_SPEED
-        if self.animation_index >= len(
-            self.spritesheets[f"{self.watcher_type}_{self.animation_direction}"]
-        ):
-            self.animation_index = 0
-        self.image = self.spritesheets[
-            f"{self.watcher_type}_{self.animation_direction}"
-        ][int(self.animation_index)]
-        self.update_rect_and_mask()
-
-    def handle_movement(self):
-        """Handling watcher movement, for now it's a simple pursuing mechanics."""
-        if not self.pursuing:
-            return
-        self.direction_to_player.x = self.player_sprite.rect.centerx - self.rect.centerx
-        self.direction_to_player.y = self.player_sprite.rect.centery - self.rect.centery
-        if self.direction_to_player.length != 0:
-            try:
-                self.direction_to_player.normalize_ip()
-            except ValueError:
-                pass
-        self.rect.center += self.direction_to_player * WATCHER_VEL
-
-    def update(self):
-        super().update()
-        self.handle_movement()
-        self.handle_animation()
-
-
-class Player(Entity):
-    """Player sprite class."""
-
-    ATTACK_SPRITESHEETS = load_spritesheet(
-        path.join("assets", "player", "attack"),
-        PLAYER_SPRITE_WIDTH,
-        PLAYER_SPRITE_HEIGHT,
-    )
-    DEATH_SPRITESHEETS = load_spritesheet(
-        path.join("assets", "player", "death"),
-        PLAYER_SPRITE_WIDTH,
-        PLAYER_SPRITE_HEIGHT,
-    )
-    IDLE_SPRITESHEETS = load_spritesheet(
-        path.join("assets", "player", "idle"),
-        PLAYER_SPRITE_WIDTH,
-        PLAYER_SPRITE_HEIGHT,
-    )
-    RUN_SPRITESHEETS = load_spritesheet(
-        path.join("assets", "player", "run"),
-        PLAYER_SPRITE_WIDTH,
-        PLAYER_SPRITE_HEIGHT,
-    )
-
-    def __init__(self, pos, group, z_index=1, shadow_z_index=1):
-        self.spritesheets = self.IDLE_SPRITESHEETS
-        self.animation_state = "idle"
-        self.last_frame_animation_state = self.animation_state
-        self.animation_direction = "down"
-        self.animation_index = 0
-        image = self.spritesheets[
-            f"{self.animation_state}_{self.animation_direction}_40x40"
-        ][self.animation_index]
-        super().__init__(
-            pos,
-            image,
-            SHADOW_RGBA,
-            2,
-            3,
-            MAX_HEALTH_PLAYER,
-            group,
-            z_index,
-            shadow_z_index,
-        )
-        self.direction = pygame.math.Vector2()
-        self.attacking = False
         self.trigger_group = pygame.sprite.Group()
         self.load_trigger_group(group, self.trigger_group)
+        self.z_index = z_index
 
     def load_trigger_group(self, group, trigger_group):
         """Helper function to load all triggers."""
@@ -313,6 +121,257 @@ class Player(Entity):
         """Helper function to get the collided triggers."""
         collided_triggers = pygame.sprite.spritecollide(self, self.trigger_group, False)
         return collided_triggers
+
+    def handle_check_hazard_collision(self):
+        """Checking hazard collision, (e.g. water)"""
+        for collided_trigger in self.get_collided_triggers():
+            if collided_trigger.name == HAZARD_TRIGGER:
+                self.dying = True
+
+    def handle_check_obstacle_collision(self):
+        """Checking if a vertical or horizontal collision occurs with an obstacle."""
+        for collided_trigger in self.get_collided_triggers():
+            if collided_trigger.name == OBSTACLE_TRIGGER:
+                collision_direction = check_collision_direction(
+                    self.rect, collided_trigger.rect
+                )
+                if collision_direction.y < 0:
+                    self.rect.top = collided_trigger.rect.bottom
+                elif collision_direction.y > 0:
+                    self.rect.bottom = collided_trigger.rect.top
+                elif collision_direction.x < 0:
+                    self.rect.left = collided_trigger.rect.right
+                elif collision_direction.x > 0:
+                    self.rect.right = collided_trigger.rect.left
+
+    def handle_dying(self):
+        if self.health <= 0:
+            self.dying = True
+
+    def update(self):
+        self.handle_check_hazard_collision()
+        self.handle_check_obstacle_collision()
+        self.handle_dying()
+
+
+class PursuingEnemy(Entity):
+    """Enemy base sprite class."""
+
+    def __init__(
+        self,
+        pos,
+        image,
+        health,
+        player_sprite,
+        group,
+        shadow_rgba,
+        shadow_width_scale,
+        shadow_height_scale,
+        shadow_center_point="center",
+        z_index=1,
+        shadow_z_index=1,
+    ):
+        super().__init__(
+            pos,
+            image,
+            health,
+            group,
+            shadow_rgba,
+            shadow_width_scale,
+            shadow_height_scale,
+            shadow_center_point,
+            z_index,
+            shadow_z_index,
+        )
+        self.player_sprite = player_sprite
+        self.distance_to_player = 0
+        self.direction_to_player = pygame.math.Vector2()
+        self.pursuing = False
+        self.hit_countdown = 0
+
+    def handle_alert_radius(self):
+        """Checking if this sprite is in the alert radius or not."""
+        self.distance_to_player = calculate_distance(
+            self.player_sprite.rect.center, self.rect.center
+        )
+
+        # Check if the player is within the detection radius.
+        self.pursuing = True if self.distance_to_player <= ENEMY_ALERT_RADIUS else False
+
+    def handle_player_contact(self):
+        """Handling mask collision with the player, check if the player is attacking or not."""
+        if pygame.sprite.collide_mask(self, self.player_sprite):
+            if self.player_sprite.attacking:
+                self.rect.center += -(
+                    self.direction_to_player * PLAYER_KNOCKBACK_DISTANCE
+                )
+                self.health -= PLAYER_SWORD_DAMAGE
+                self.hit_countdown = ENEMY_FLASH_FRAMES
+            else:
+
+                # While the player is invisible, ignore contack damage.
+                if self.player_sprite.invisibility_countdown > 0:
+                    return
+
+                self.player_sprite.rect.center += (
+                    self.direction_to_player * ENEMY_KNOCKBACK_DISTANCE
+                )
+                self.player_sprite.health -= ENEMY_CONTACT_DAMANGE
+                self.player_sprite.invisibility_countdown = PLAYER_INVISIBILITY_FRAMES
+
+    def handle_movement(self):
+        """Handling enemy movement, this is just a simple pursuing mechanics."""
+        if not self.pursuing:
+            return
+        self.direction_to_player.x = self.player_sprite.rect.centerx - self.rect.centerx
+        self.direction_to_player.y = self.player_sprite.rect.centery - self.rect.centery
+        if self.direction_to_player.length != 0:
+            try:
+                self.direction_to_player.normalize_ip()
+            except ValueError:
+                pass
+        self.rect.center += self.direction_to_player * ENEMY_VEL
+
+    def handle_death(self):
+        """Handling operations after enemy death."""
+        if self.dying:
+            self.shadow.kill()
+            self.kill()
+
+    def update(self):
+        super().update()
+        self.handle_alert_radius()
+        self.handle_player_contact()
+        self.handle_movement()
+        self.handle_death()
+
+
+class AnimatedPursuingEnemy(PursuingEnemy):
+    """Pursuing enemy sprite class."""
+
+    def __init__(
+        self, enemy_name, pos, player_sprite, group, z_index=1, shadow_z_index=1
+    ):
+        self.spritesheets = split_spritesheets(
+            path.join("assets", "enemies"),
+            f"{enemy_name}.png",
+            ENEMY_SPRITE_WIDTH,
+            ENEMY_SPRITE_HEIGHT,
+            flipped=True,
+        )
+        self.animation_direction = "right"
+        self.animation_index = 0
+        self.sprites = self.spritesheets[f"{enemy_name}_{self.animation_direction}"]
+        image = self.sprites[self.animation_index]
+        super().__init__(
+            pos,
+            image,
+            MAX_ENEMY_HEALTH,
+            player_sprite,
+            group,
+            SHADOW_COLOR,
+            ENEMY_SHADOW_WIDTH_SCALE,
+            ENEMY_SHADOW_HEIGHT_SCALE,
+            "center",
+            z_index,
+            shadow_z_index,
+        )
+        self.enemy_name = enemy_name
+
+    def update_rect_and_mask(self):
+        """Helper function to update rect and mask every time a change occurs."""
+        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
+        self.mask = pygame.mask.from_surface(self.image)
+
+    def determine_animation_direction(self):
+        """Helper function to determine which direction the enemy is currently facing"""
+        if self.direction_to_player.x > 0:
+            self.animation_direction = "right"
+        else:
+            self.animation_direction = "left"
+
+    def handle_flash(self):
+        """Handling enemy flash when hit."""
+        # TODO: Implement this somehow.
+        if self.hit_countdown > 0:
+            if self.hit_countdown % FLASH_STEP_FRAME == 0:
+                ...
+            else:
+                ...
+        else:
+            ...
+
+    def handle_animation(self):
+        """Handling enemy animation."""
+        self.determine_animation_direction()
+        self.animation_index += NORMAL_ANIMATION_SPEED
+        if self.animation_index >= len(
+            self.spritesheets[f"{self.enemy_name}_{self.animation_direction}"]
+        ):
+            self.animation_index = 0
+        self.sprites = self.spritesheets[
+            f"{self.enemy_name}_{self.animation_direction}"
+        ]
+        self.image = self.sprites[int(self.animation_index)]
+        self.update_rect_and_mask()
+
+    def update(self):
+        super().update()
+        self.handle_animation()
+        self.handle_flash()
+
+
+class Player(Entity):
+    """Player sprite class."""
+
+    ATTACK_SPRITESHEETS = load_spritesheets(
+        path.join("assets", "player", "attack"),
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
+    )
+    DEATH_SPRITESHEETS = load_spritesheets(
+        path.join("assets", "player", "death"),
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
+    )
+    IDLE_SPRITESHEETS = load_spritesheets(
+        path.join("assets", "player", "idle"),
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
+    )
+    RUN_SPRITESHEETS = load_spritesheets(
+        path.join("assets", "player", "run"),
+        PLAYER_SPRITE_WIDTH,
+        PLAYER_SPRITE_HEIGHT,
+    )
+
+    def __init__(self, pos, group, z_index=1, shadow_z_index=1):
+        self.spritesheets = self.IDLE_SPRITESHEETS
+        self.animation_state = "idle"
+        self.last_frame_animation_state = self.animation_state
+        self.animation_direction = "down"
+        self.animation_index = 0
+        self.sprites = self.spritesheets[
+            f"{self.animation_state}_{self.animation_direction}_40x40"
+        ]
+        image = self.sprites[self.animation_index]
+        super().__init__(
+            pos,
+            image,
+            MAX_PLAYER_HEALTH,
+            group,
+            SHADOW_COLOR,
+            PLAYER_SHADOW_WIDTH_SCALE,
+            PLAYER_SHADOW_HEIGHT_SCALE,
+            "midbottom",
+            z_index,
+            shadow_z_index,
+        )
+        self.direction = pygame.math.Vector2()
+        self.attacking = False
+        self.invisibility_countdown = 0
+        self.trigger_group = pygame.sprite.Group()
+        self.load_trigger_group(group, self.trigger_group)
 
     def update_rect_and_mask(self):
         """Helper function to update rect and mask every time a change occurs."""
@@ -360,6 +419,21 @@ class Player(Entity):
                 self.spritesheets = self.DEATH_SPRITESHEETS
             case _:
                 raise NotImplementedError(self.animation_state)
+
+    def handle_invisibility_frames(self):
+        """Handling enemy flash when hit."""
+        if self.invisibility_countdown > 0:
+            if self.invisibility_countdown % FLASH_STEP_FRAME == 0:
+                for sprite in self.sprites:
+                    sprite.set_alpha(ALPHA_MAX)
+            else:
+                for sprite in self.sprites:
+                    sprite.set_alpha(ALPHA_TRANSPARENT)
+            self.invisibility_countdown -= 1
+        else:
+            for sprite in self.sprites:
+                if sprite.get_alpha() != ALPHA_MAX:
+                    sprite.set_alpha(ALPHA_MAX)
 
     def handle_check_hazard_collision(self):
         """Checking hazard collision, (e.g. water)"""
@@ -423,25 +497,25 @@ class Player(Entity):
         self.determine_animation_state()
         self.load_animation_spritesheet()
         animation_key = f"{self.animation_state}_{self.animation_direction}_40x40"
-        sprites = self.spritesheets[animation_key]
+        self.sprites = self.spritesheets[animation_key]
 
         # Animation logic when attacking.
         if self.attacking:
             self.animation_index += SWINGING_ANIMATION_SPEED
-            if self.animation_index >= len(sprites):
+            if self.animation_index >= len(self.sprites):
                 self.attacking = False
         else:
             self.animation_index += NORMAL_ANIMATION_SPEED
 
         # Animation logic when the player is dead.
-        if self.dying and self.animation_index >= len(sprites):
+        if self.dying and self.animation_index >= len(self.sprites):
             self.shadow.kill()
             self.kill()
 
         # Reset animation index if animation state changed or reached end of sprites.
         if (
             self.animation_state != self.last_frame_animation_state
-            or self.animation_index >= len(sprites)
+            or self.animation_index >= len(self.sprites)
         ):
             self.animation_index = 0
 
@@ -454,10 +528,9 @@ class Player(Entity):
 
     def update(self):
         super().update()
-        self.handle_check_hazard_collision()
-        self.handle_check_obstacle_collision()
         self.handle_animation()
         self.handle_movement()
+        self.handle_invisibility_frames()
 
 
 class CameraGroup(pygame.sprite.Group):
@@ -471,7 +544,7 @@ class CameraGroup(pygame.sprite.Group):
         self.offset = pygame.math.Vector2()
 
         # Zoom setup.
-        self.zoom_scale = DEFAULT_SCALE
+        self.zoom_scale = DEFAULT_ZOOM_SCALE
         self.internal_screen = pygame.Surface(
             (INTERNAL_SCREEN_WIDTH, INTERNAL_SCREEN_HEIGHT), pygame.SRCALPHA
         )
@@ -494,10 +567,10 @@ class CameraGroup(pygame.sprite.Group):
             self.zoom_scale -= SCALE_SPEED
 
         # Zoom cap.
-        if self.zoom_scale <= MIN_SCALE:
-            self.zoom_scale = MIN_SCALE
-        elif self.zoom_scale >= MAX_SCALE:
-            self.zoom_scale = MAX_SCALE
+        if self.zoom_scale <= MIN_ZOOM_SCALE:
+            self.zoom_scale = MIN_ZOOM_SCALE
+        elif self.zoom_scale >= MAX_ZOOM_SCALE:
+            self.zoom_scale = MAX_ZOOM_SCALE
 
     def center_target_to_camera(self, target_sprite):
         """Center target to the middle of the screen."""
